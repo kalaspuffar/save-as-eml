@@ -1,0 +1,29 @@
+{
+  "manifest_version": 3,
+  "name": "Save Message as EML",
+  "version": "0.3.0",
+  "description": "Save the currently displayed message as <timestamp>.eml to a directory you choose in the options.",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "save-as-eml@danielpersson.local",
+      "strict_min_version": "128.0"
+    }
+  },
+  "permissions": [
+    "messagesRead",
+    "downloads",
+    "storage",
+    "notifications"
+  ],
+  "message_display_action": {
+    "default_title": "Save as EML",
+    "default_label": "Save .eml"
+  },
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  },
+  "background": {
+    "scripts": ["background.js"]
+  }
+}
