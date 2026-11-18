@@ -29,6 +29,11 @@ Thunderbird's **downloads directory** — absolute paths and `..` are
 rejected by the API (verified in the Gecko source: `ext-downloads.js`
 throws `filename must not be an absolute path`), `data:` URLs are refused,
 and there is no WebExtension API to write to an arbitrary directory.
+(Reading or temporarily changing Thunderbird's download directory is
+also not possible from a WebExtension: the `browserSettings` API does
+not expose it, and Thunderbird's own settings APIs only cover
+spellcheck and the search provider — both verified in the TB/Gecko
+source.)
 So the extension drops `<timestamp>.eml` into the downloads directory,
 and the mover picks it up within about a second and moves it to your
 output directory. Your normal downloads are never touched: the mover only
