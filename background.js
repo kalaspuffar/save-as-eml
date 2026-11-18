@@ -1,39 +1,43 @@
 /*
- * Save Message as EML — v0.3.0
+ * Save Message as EML — v0.4.0 (local endpoint)
  *
  * The "Save .eml" button appears in the message display toolbar.
- * Pressing it saves the currently displayed message as
- * <timestamp>.eml (local time at the moment of the click).
+ * Pressing it sends the raw RFC 822 source of the currently displayed
+ * message (headers, body, attachments) as one HTTP POST to the local
+ * endpoint configured in the options, e.g.
  *
- * Why the download-dir detour (verified in Thunderbird/Gecko source):
- *   - the WebExtension `downloads` API only writes inside Thunderbird's
- *     downloads directory: absolute filenames and ".." are rejected
- *     (ext-downloads.js: "filename must not be an absolute path",
- *      "filename must not contain back-references (..)"),
- *   - data: URLs are refused by content policy,
- *   - there is no WebExtension API to write files to an arbitrary
- *     directory (the old localFile API is gone).
+ *     http://127.0.0.1:8765/eml
  *
- * So the extension writes <timestamp>.eml to the downloads directory,
- * and the small local mover (mover/eml_mover.py) moves it to the
- * output directory configured in the extension options.
+ * The server (server/eml_server.py) writes it to your output directory
+ * and returns the final path. All processing logic lives on the server,
+ * which you own and can extend.
+ *
+ * Why an endpoint at all (verified in Thunderbird/Gecko source):
+ *   - the WebExtension `downloads` API only writes into Thunderbird's
+ *     downloads directory (absolute filenames and ".." are rejected by
+ *     ext-downloads.js), `data:` URLs are refused,
+ *   - no WebExtension API writes to an arbitrary directory (localFile is
+ *     gone), and the download directory itself cannot be read or
+ *     changed from an extension (browserSettings does not expose it),
+ *   - so the extension does the one thing it can do everywhere:
+ *     POST the bytes to a loopback endpoint.
  *
  *   browser.messageDisplayAction.onClicked        the button
  *   browser.messageDisplay.getDisplayedMessages   which message is open
- *   browser.messages.getRaw                       raw RFC 822 source (DOM File)
- *   browser.downloads.download                    write to the downloads dir
- *   browser.storage.local                         configured output dir
+ *   browser.messages.getRaw                       raw RFC 822 source
+ *   fetch() to the loopback endpoint (host_permissions)
+ *   browser.storage.local                         configured endpoint
  *
- *  - never overwrites : conflictAction "uniquify"
- *  - no dialogs, no prompts, no network, no third-party code
+ *  - no `downloads` permission, no file-system access from the extension,
+ *    no third-party code, no remote hosts (127.0.0.1 only)
+ *  - one notification with the final path (from the server's reply)
  *
- * Log lines are prefixed [eml]; see about:debugging -> This Thunderbird
+ * Log lines are prefixed [eml]; about:debugging -> This Thunderbird
  * -> "Save Message as EML" -> Console.
  */
 
-// Fallback output directory, used only if the options have not been set.
-const DEFAULT_DIR = "/home/danielp/eml-out";
-const DOWNLOADS_HINT = "downloads directory";
+// Default endpoint, used until the options are set.
+const DEFAULT_ENDPOINT = "http://127.0.0.1:8765/eml";
 
 const log = (...a) => console.log("[eml]", ...a);
 const logErr = (...a) => console.error("[eml]", ...a);
@@ -50,7 +54,8 @@ messenger.messageDisplayAction.onClicked.addListener(() => {
 });
 
 async function saveDisplayed() {
-  const dir = (await messenger.storage.local.get("dir")).dir || DEFAULT_DIR;
+  const endpoint = (await messenger.storage.local.get("endpoint")).endpoint
+    || DEFAULT_ENDPOINT;
 
   // 1. Which message is currently displayed? (active tab)
   log("step 1: getDisplayedMessages …");
@@ -61,34 +66,43 @@ async function saveDisplayed() {
   }
   log("step 1 ok: msg.id =", msg.id, "subject =", msg.subject);
 
-  // 2. The raw message source (headers + body + attachments) as a DOM File.
+  // 2. The raw message source (headers + body + attachments).
   log("step 2: messages.getRaw …");
   const file = await messenger.messages.getRaw(msg.id);
-  log("step 2 ok: file =", file && file.name, "size =", file && file.size);
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  log("step 2 ok: size =", bytes.length);
 
-  // 3. File name: <timestamp>.eml — the moment of the click (local time).
+  // 3. Suggested file name: <timestamp>.eml, moment of the click (local).
+  //    The server may keep it or rename as it likes.
   const c = new Date();
   const name =
     `${c.getFullYear()}${pad(c.getMonth() + 1)}${pad(c.getDate())}` +
     `_${pad(c.getHours())}${pad(c.getMinutes())}${pad(c.getSeconds())}.eml`;
 
-  // 4. Write to the downloads directory (the only place the WebExtension
-  //    downloads API may write; a relative filename is required).
-  log("step 4: downloads.download … name =", name, "target dir =", dir);
-  const url = URL.createObjectURL(file);
-  try {
-    await messenger.downloads.download({
-      url,
-      filename: name,
-      conflictAction: "uniquify",
-    });
-    log("step 4 ok: download accepted");
-  } finally {
-    URL.revokeObjectURL(url);
+  // 4. POST the bytes to the local endpoint.
+  log("step 3: POST", endpoint, "name =", name);
+  const res = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/octet-stream",
+      "X-EML-Name": name,
+      "X-EML-Subject": (msg.subject || "").slice(0, 500),
+      "X-EML-Message-Id": msg.id,
+    },
+    body: bytes,
+  });
+  const text = await res.text();
+  if (!res.ok) {
+    throw new Error(`server replied ${res.status}: ${text.slice(0, 300)}`);
   }
-
-  log("done: " + name + " in " + DOWNLOADS_HINT + "; mover will move it to " + dir);
-  notify("Saved as EML", `${name} → ${dir}`);
+  let path = text;
+  try {
+    path = JSON.parse(text).path || text;
+  } catch (_) {
+    /* server did not return JSON — raw reply is the path */
+  }
+  log("done:", path);
+  notify("Saved as EML", String(path));
 }
 
 function notify(title, message) {

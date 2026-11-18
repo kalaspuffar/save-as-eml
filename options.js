@@ -1,34 +1,35 @@
 /*
  * Save Message as EML — options page
  *
- * One setting: the absolute output directory. Stored in the
- * extension's storage.local; read by background.js on every click
- * and by mover/eml_mover.py from the profile's storage file.
+ * One setting: the local endpoint the raw message is POSTed to.
+ * Stored in the extension's storage.local; read by background.js on
+ * every click.
  */
 
-const input = document.getElementById("dir");
+const input = document.getElementById("endpoint");
 const save = document.getElementById("save");
 const status = document.getElementById("status");
 
 async function load() {
-  const s = await browser.storage.local.get("dir");
-  if (s.dir) {
-    input.value = s.dir;
+  const s = await browser.storage.local.get("endpoint");
+  if (s.endpoint) {
+    input.value = s.endpoint;
   }
 }
 
 save.addEventListener("click", async () => {
-  const dir = input.value.trim();
-  if (!dir) {
-    status.textContent = "Enter a directory path first.";
+  const endpoint = input.value.trim();
+  if (!endpoint) {
+    status.textContent = "Enter the endpoint URL first.";
     return;
   }
-  if (!dir.startsWith("/")) {
-    status.textContent = "Use an absolute path, e.g. /home/danielp/eml-out";
+  if (!/^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?(\/\S*)?$/i.test(endpoint)) {
+    status.textContent =
+      "Must be a local http(s) URL, e.g. http://127.0.0.1:8765/eml";
     return;
   }
-  await browser.storage.local.set({ dir });
-  status.textContent = "Saved: " + dir;
+  await browser.storage.local.set({ endpoint });
+  status.textContent = "Saved: " + endpoint;
 });
 
 load();

@@ -1,0 +1,29 @@
+# eml-server — systemd user service for the Save Message as EML endpoint.
+#
+# Install (adjust paths if the repo is not at ~/save-as-eml or the
+# output directory should differ):
+#   mkdir -p ~/.config/systemd/user
+#   sed -e "s|__HOME__|$HOME|" -e "s|__DIR__|/home/danielp/eml-out|" \
+#     save-as-eml/server/eml-server.service \
+#     > ~/.config/systemd/user/eml-server.service
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now eml-server
+#
+# Logs:
+#   journalctl --user -u eml-server -f
+#
+# Health:
+#   curl http://127.0.0.1:8765/health
+
+[Unit]
+Description=Save Message as EML — local endpoint (loopback only)
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 __HOME__/save-as-eml/server/eml_server.py --dir __DIR__
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=default.target

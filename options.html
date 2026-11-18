@@ -16,13 +16,13 @@
   </head>
   <body>
     <h1>Save Message as EML</h1>
-    <label for="dir">Output directory</label>
-    <input id="dir" type="text" placeholder="/home/danielp/eml-out" spellcheck="false"/>
+    <label for="endpoint">Local endpoint</label>
+    <input id="endpoint" type="text" placeholder="http://127.0.0.1:8765/eml" spellcheck="false"/>
     <div class="hint">
-      Absolute path where the .eml files should end up. The Thunderbird
-      extension writes to its downloads directory first, and the
-      <code>eml-mover</code> service moves the file here within a second.
-      Create the directory if it does not exist (the mover also creates it).
+      Where the raw message is POSTed when you press the button.
+      The reference server (see <code>server/</code>) listens there and
+      writes the file to the directory you start it with. Any local
+      service that accepts the POST works.
     </div>
     <button id="save">Save</button>
     <div id="status"></div>
