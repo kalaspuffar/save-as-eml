@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Save Message as EML",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Save the currently displayed message as <timestamp>.eml by POSTing it to a local endpoint you control.",
   "browser_specific_settings": {
     "gecko": {
@@ -15,7 +15,10 @@
     "notifications"
   ],
   "host_permissions": [
-    "http://127.0.0.1/*"
+    "http://127.0.0.1/*",
+    "https://127.0.0.1/*",
+    "http://localhost/*",
+    "https://localhost/*"
   ],
   "message_display_action": {
     "default_title": "Save as EML",

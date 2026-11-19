@@ -19,10 +19,11 @@ routing, hooks) can live on the server side.
 
 | file               | what it is                                              |
 |--------------------|---------------------------------------------------------|
-| `manifest.json`    | MV3 manifest (permissions: messagesRead, storage, notifications; host permission: 127.0.0.1) |
+| `manifest.json`    | MV3 manifest (permissions: messagesRead, storage, notifications; host permissions: 127.0.0.1 + localhost) |
 | `background.js`    | button handler: get message → raw source → POST to endpoint |
 | `options.html/js`  | GUI: the local endpoint setting                        |
 | `server/eml_server.py` | reference server: writes the POSTed message to your directory |
+| `server/eml_receiver.php` | the same receiver in PHP (drop-in for `php -S`, handles the CORS preflight) |
 | `server/eml-server.service` | systemd user unit to keep the server running       |
 
 ## Why a local endpoint?
@@ -65,8 +66,28 @@ server keeps it dead simple; replace or extend it with whatever you like
    journalctl --user -u eml-server -f   # watch it work
    ```
    (Or just run `python3 server/eml_server.py --dir ~/eml-out` for testing.)
+   **Prefer PHP?** Copy `server/eml_receiver.php` into the directory and run
+   `php -S localhost:8765 eml_receiver.php` (or point your router at it).
+   It does the same job — write the POSTed message to a `.eml` file — and
+   also answers the CORS preflight Thunderbird sends, so it works even with
+   an extension build whose `host_permissions` don't cover your host.
 4. Open a message, press **Save .eml** — the notification shows the
    final path, and the file is in your directory.
+
+## Note: the `OPTIONS` preflight
+
+When you press the button you may see the server get an `OPTIONS`
+request before the real `POST`. That is a **CORS preflight**, sent by
+Firefox/Thunderbird (not by Chrome) whenever the host you target is not
+covered by the extension's `host_permissions`. If the preflight is not
+answered with `Access-Control-Allow-*` headers, the browser drops the
+real `POST` and you only ever see the `OPTIONS` (and no data).
+
+v0.4.1 covers both `127.0.0.1` and `localhost`, so with it installed no
+preflight is sent at all. If you run an older build against a host the
+manifest doesn't list, either add that host to `host_permissions` and
+reinstall, or let the server answer the preflight (the PHP handler in
+`server/eml_receiver.php` does this for you).
 
 ## Security model
 
